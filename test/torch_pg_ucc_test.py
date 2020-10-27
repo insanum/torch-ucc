@@ -22,13 +22,17 @@ except:
     print('OMPI env variables are not found')
     sys.exit(1)
 
-os.environ['MASTER_PORT'] = '32167'
-os.environ['MASTER_ADDR'] = 'localhost'
+if not os.environ.get('MASTER_PORT', None):
+    os.environ['MASTER_PORT'] = '32167'
+if not os.environ.get('MASTER_ADDR', None):
+    os.environ['MASTER_ADDR'] = 'localhost'
+
 os.environ['RANK']        = str(rank)
 os.environ['WORLD_SIZE']  = str(size)
 
+if args.use_cuda:
+    torch.cuda.set_device(rank)
 
-torch.cuda.set_device(rank)
 print("World size {}, rank {}".format(size, rank))
 dist.init_process_group(args.backend, rank=rank, world_size=size)
 

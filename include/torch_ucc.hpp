@@ -158,6 +158,23 @@ protected:
 private:
     struct ucc_config {
         bool enable_progress_thread;
+#ifdef WITH_BNXT_CO
+        /*
+         * host_proc_rank   = OMPI_COMM_WORLD_RANK (rank)
+         * world_size       = OMPI_COMM_WORLD_SIZE (size)
+         * bnxt_co_app_addr = BNXT_CO_APP_ADDR
+         * bnxt_co_app_port = BNXT_CO_APP_PORT
+         * master_addr      = BNXT_CO_MASTER_ADDR
+         * master_port      = BNXT_CO_MASTER_PORT
+         * logs             = BNXT_CO_LOGS
+         */
+        char *app_addr;
+        uint16_t app_port;
+        char *master_addr;
+        uint16_t master_port;
+#define BNXT_CO_LOGS_DEFAULT -1
+        uint32_t logs;
+#endif /* WITH_BNXT_CO */
     } config;
   
     void read_config();

@@ -36,6 +36,17 @@ else:
     plugin_libraries.append("xccl")
     plugin_compile_args.append("-DWITH_XCCL")
 
+with_bnxt_co = os.environ.get("WITH_BNXT_CO")
+if with_bnxt_co is None or with_bnxt_co == "no":
+    print("bnxt_co offload support is disabled")
+else:
+    print("bnxt_co offload support is enabled: {}".format(with_bnxt_co))
+    #plugin_sources.append("src/torch_bnxt_co.cpp")
+    plugin_include_dirs.append("{}/include/".format(with_bnxt_co))
+    plugin_library_dirs.append("{}/lib/".format(with_bnxt_co))
+    plugin_libraries.append("bnxtco")
+    plugin_compile_args.append("-DWITH_BNXT_CO")
+
 print(plugin_sources)
 with_cuda = os.environ.get("WITH_CUDA")
 if with_cuda is None or with_cuda == "no":
