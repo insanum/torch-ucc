@@ -25,6 +25,10 @@
 #include <torch_ucc_ops.hpp>
 #include <torch_ucc_sendrecv.hpp>
 
+#ifdef WITH_BNXT_CO
+#include <bnxt_co.h>
+#endif
+
 namespace c10d {
 
 class ProcessGroupUCC : public ProcessGroup {
@@ -171,6 +175,9 @@ class ProcessGroupUCC : public ProcessGroup {
   std::deque<torch_ucc_coll_request_t*> progress_queue;
   std::condition_variable queue_produce_cv;
   std::condition_variable queue_consume_cv;
+#ifdef WITH_BNXT_CO
+  bnxt_co_ctx_h bnxt_co_ctx;
+#endif
 
   void progress_loop();
   void enqueue_request(torch_ucc_coll_request_t* req);
@@ -194,7 +201,7 @@ class ProcessGroupUCC : public ProcessGroup {
     uint16_t master_port;
 #define BNXT_CO_LOGS_DEFAULT -1
     uint32_t logs;
-#endif /* WITH_BNXT_CO */
+#endif
   } config;
 
   void read_config();

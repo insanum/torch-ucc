@@ -13,10 +13,6 @@
 #include <cuda.h>
 #endif
 
-#ifdef WITH_BNXT_CO
-#include <bnxt_co.h>
-#endif
-
 namespace c10d {
 
 void ProcessGroupUCC::check_tensor(const std::vector<at::Tensor>& tensors) {
@@ -175,7 +171,7 @@ void ProcessGroupUCC::read_config() {
   } else {
     config.logs = BNXT_CO_LOGS_DEFAULT;
   }
-#endif /* WITH_BNXT_CO */
+#endif
 }
 
 ProcessGroupUCC::ProcessGroupUCC(
@@ -206,10 +202,10 @@ ProcessGroupUCC::ProcessGroupUCC(
   if (bnxt_co_init(rank, size,
                    config.app_addr, config.app_port,
                    config.master_addr, config.master_port,
-                   config.logs) != BNXT_CO_OK) {
+                   config.logs, &bnxt_co_ctx) != BNXT_CO_OK) {
     throw std::runtime_error("ProcessGroupUCC failed to init bnxt_co");
   }
-#endif /* WITH_BNXT_CO */
+#endif
 
   if (config.enable_progress_thread) {
     progress_thread = std::thread(&ProcessGroupUCC::progress_loop, this);
@@ -270,8 +266,8 @@ ProcessGroupUCC::~ProcessGroupUCC() {
   }
 
 #ifdef WITH_BNXT_CO
-  bnxt_co_finish(true);
-#endif /* WITH_BNXT_CO */
+  bnxt_co_finish(bnxt_co_ctx, true);
+#endif
 
   coll_ops.coll_comm_close(coll_comm);
   torch_ucx_comm_close(ucx_comm, store_);
