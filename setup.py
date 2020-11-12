@@ -1,5 +1,6 @@
 #
 # Copyright (C) Mellanox Technologies Ltd. 2001-2020.  ALL RIGHTS RESERVED.
+# Copyright (C) Broadcom. 2020-2020.  ALL RIGHTS RESERVED.
 #
 
 import os
@@ -41,7 +42,7 @@ if with_bnxt_co is None or with_bnxt_co == "no":
     print("bnxt_co offload support is disabled")
 else:
     print("bnxt_co offload support is enabled: {}".format(with_bnxt_co))
-    #plugin_sources.append("src/torch_bnxt_co.cpp")
+    plugin_sources.append("src/torch_bnxt_co.cpp")
     plugin_include_dirs.append("{}/include/".format(with_bnxt_co))
     plugin_library_dirs.append("{}/lib/".format(with_bnxt_co))
     plugin_libraries.append("bnxtco")

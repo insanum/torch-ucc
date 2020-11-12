@@ -131,47 +131,6 @@ void ProcessGroupUCC::read_config() {
   if (env) {
     config.enable_progress_thread = std::atoi(env);
   }
-
-#ifdef WITH_BNXT_CO
-  env = std::getenv("BNXT_CO_APP_ADDR");
-  if (env) {
-    config.app_addr = env;
-  } else {
-    throw std::runtime_error("ProcessGroupUCC init failed "
-                             "(missing BNXT_CO_APP_ADDR)");
-  }
-
-  env = std::getenv("BNXT_CO_APP_PORT");
-  if (env) {
-    config.app_port = std::atoi(env);
-  } else {
-    throw std::runtime_error("ProcessGroupUCC init failed "
-                             "(missing BNXT_CO_APP_PORT)");
-  }
-
-  env = std::getenv("BNXT_CO_MASTER_ADDR");
-  if (env) {
-    config.master_addr = env;
-  } else {
-    throw std::runtime_error("ProcessGroupUCC init failed "
-                             "(missing BNXT_CO_MASTER_ADDR)");
-  }
-
-  env = std::getenv("BNXT_CO_MASTER_PORT");
-  if (env) {
-    config.master_port = std::atoi(env);
-  } else {
-    throw std::runtime_error("ProcessGroupUCC init failed "
-                             "(missing BNXT_CO_MASTER_PORT)");
-  }
-
-  env = std::getenv("BNXT_CO_LOGS");
-  if (env) {
-    config.logs = std::atoi(env);
-  } else {
-    config.logs = BNXT_CO_LOGS_DEFAULT;
-  }
-#endif
 }
 
 ProcessGroupUCC::ProcessGroupUCC(
@@ -197,15 +156,6 @@ ProcessGroupUCC::ProcessGroupUCC(
   if (st_ucc != TORCH_UCC_OK) {
     throw std::runtime_error("ProcessGroupUCC failed to init collective comm");
   }
-
-#ifdef WITH_BNXT_CO
-  if (bnxt_co_init(rank, size,
-                   config.app_addr, config.app_port,
-                   config.master_addr, config.master_port,
-                   config.logs, &bnxt_co_ctx) != BNXT_CO_OK) {
-    throw std::runtime_error("ProcessGroupUCC failed to init bnxt_co");
-  }
-#endif
 
   if (config.enable_progress_thread) {
     progress_thread = std::thread(&ProcessGroupUCC::progress_loop, this);
@@ -264,10 +214,6 @@ ProcessGroupUCC::~ProcessGroupUCC() {
     queue_produce_cv.notify_all();
     progress_thread.join();
   }
-
-#ifdef WITH_BNXT_CO
-  bnxt_co_finish(bnxt_co_ctx, true);
-#endif
 
   coll_ops.coll_comm_close(coll_comm);
   torch_ucx_comm_close(ucx_comm, store_);

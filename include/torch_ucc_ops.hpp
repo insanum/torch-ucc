@@ -1,5 +1,6 @@
 /**
  * * Copyright (C) Mellanox Technologies Ltd. 2020.  ALL RIGHTS RESERVED.
+ * * Copyright (C) Broadcom Inc. 2020.  ALL RIGHTS RESERVED.
  * *
  * * See file LICENSE for terms.
  * */
@@ -93,6 +94,10 @@ extern torch_ucc_coll_ops_t ucx_coll_ops;
 extern torch_ucc_coll_ops_t xccl_coll_ops;
 #endif
 
+#ifdef WITH_BNXT_CO
+extern torch_ucc_coll_ops_t bnxt_co_coll_ops;
+#endif
+
 inline void torch_ucc_coll_request_init(
     torch_ucc_coll_comm_t* coll_comm,
     torch_ucc_coll_request_t* request,
@@ -126,8 +131,13 @@ inline torch_ucc_status_t torch_ucc_coll_ops_init(
     torch_ucc_coll_ops_t* coll_ops) {
   char* env;
 
+  *coll_ops = ucx_coll_ops;
+
   env = std::getenv("TORCH_UCC_COLL_BACKEND");
-  if ((env != NULL) && (!strcasecmp(env, "xccl"))) {
+  if ((env == NULL) || !strcasecmp(env, "ucx"))
+      return TORCH_UCC_OK;
+
+  if (!strcasecmp(env, "xccl")) {
 #ifdef WITH_XCCL
     *coll_ops = xccl_coll_ops;
 #else
@@ -135,8 +145,18 @@ inline torch_ucc_status_t torch_ucc_coll_ops_init(
         stderr, "ProcessGroupUCC: plugin wasn't compiled with XCCL support\n");
     return TORCH_UCC_ERROR;
 #endif
+  } else if (!strcasecmp(env, "bnxt_co")) {
+#ifdef WITH_BNXT_CO
+    *coll_ops = bnxt_co_coll_ops;
+#else
+    fprintf(
+        stderr, "ProcessGroupUCC: plugin wasn't compiled with BNXT_CO support\n");
+    return TORCH_UCC_ERROR;
+#endif
   } else {
-    *coll_ops = ucx_coll_ops;
+    fprintf(
+        stderr, "ProcessGroupUCC: unknown backend '%s'\n", env);
+    return TORCH_UCC_ERROR;
   }
 
   return TORCH_UCC_OK;
