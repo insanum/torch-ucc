@@ -17,6 +17,7 @@ struct torch_bnxt_co_request_t {
 
     bnxt_co_coll_type_t coll_type;
     bnxt_co_dt_t datatype;
+    int src_rank; /* source rank for broadcast */
     uint8_t *src_buf;
     uint32_t src_buf_len;
     uint8_t *dst_buf;
@@ -180,6 +181,30 @@ torch_ucc_status_t torch_bnxt_co_broadcast(
     int root,
     torch_ucc_coll_request_t** request)
 {
+    torch_bnxt_co_comm_t* bnxt_co_comm = (torch_bnxt_co_comm_t*)coll_comm;
+    torch_bnxt_co_request_t* coll_req;
+
+    coll_req = new torch_bnxt_co_request_t;
+
+    std::vector<at::Tensor> tensors = { tensor };
+    torch_ucc_coll_request_init(coll_comm,
+                                (torch_ucc_coll_request_t*)coll_req,
+                                &tensors, nullptr);
+
+    coll_req->comm = bnxt_co_comm;
+    coll_req->status = TORCH_UCC_OPERATION_INITIALIZED;
+    coll_req->coll_type = BNXT_CO_BROADCAST;
+    coll_req->datatype = bnxt_co_type_map.at(tensor.scalar_type());
+    coll_req->src_rank = root;
+    coll_req->src_buf = (uint8_t *)tensor.data_ptr();
+    coll_req->src_buf_len = (tensor.element_size() * tensor.numel());
+    coll_req->dst_buf = coll_req->src_buf;
+    coll_req->dst_buf_len = coll_req->src_buf_len;
+    coll_req->elem_size = ((tensor.element_size() * tensor.numel()) /
+                           bnxt_co_comm->p2p_comm->size);
+
+    *request = (torch_ucc_coll_request_t*)coll_req;
+
     return TORCH_UCC_OK;
 }
 
@@ -190,7 +215,13 @@ static torch_ucc_status_t torch_bnxt_co_coll_cmd(torch_bnxt_co_request_t* req)
         return TORCH_UCC_ERROR;
 
     case BNXT_CO_BROADCAST:
-        return TORCH_UCC_ERROR;
+        return (bnxt_co_broadcast_cmd(req->comm->bnxt_co_ctx,
+                                      req->datatype,
+                                      req->src_rank,
+                                      req->src_buf,
+                                      req->src_buf_len,
+                                      &req->tag) == BNXT_CO_OK)
+                   ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
     case BNXT_CO_ALLREDUCE:
         return TORCH_UCC_ERROR;
@@ -235,7 +266,15 @@ static torch_ucc_status_t torch_bnxt_co_coll_resp(torch_bnxt_co_request_t* req)
         return TORCH_UCC_ERROR;
 
     case BNXT_CO_BROADCAST:
-        return TORCH_UCC_ERROR;
+        /* copy the result into the output buffer */
+        return (bnxt_co_broadcast_resp(req->comm,
+                                       req->datatype,
+                                       req->src_rank,
+                                       req->resp_msg,
+                                       req->resp_msg_len,
+                                       req->dst_buf,
+                                       req->dst_buf_len) == BNXT_CO_OK)
+                   ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
     case BNXT_CO_ALLREDUCE:
         return TORCH_UCC_ERROR;
