@@ -107,6 +107,32 @@ torch_ucc_status_t torch_bnxt_co_allgather(
     std::vector<at::Tensor>& output_tensors,
     torch_ucc_coll_request_t** request)
 {
+    torch_bnxt_co_comm_t* bnxt_co_comm = (torch_bnxt_co_comm_t*)coll_comm;
+    torch_bnxt_co_request_t* coll_req;
+
+    coll_req = new torch_bnxt_co_request_t;
+
+    std::vector<at::Tensor> input_tensors = { input_tensor };
+    torch_ucc_coll_request_init(coll_comm,
+                                (torch_ucc_coll_request_t*)coll_req,
+                                &input_tensors, &output_tensors);
+
+    coll_req->comm = bnxt_co_comm;
+    coll_req->status = TORCH_UCC_OPERATION_INITIALIZED;
+    coll_req->coll_type = BNXT_CO_ALLGATHER;
+    coll_req->datatype = bnxt_co_type_map.at(input_tensor.scalar_type());
+    coll_req->src_buf = (uint8_t *)input_tensor.data_ptr();
+    coll_req->src_buf_len = (input_tensor.element_size() *
+                             input_tensor.numel());
+    coll_req->flat_tensor = newLikeFlat(output_tensors);
+    coll_req->dst_buf = (uint8_t *)coll_req->flat_tensor.data_ptr();
+    coll_req->dst_buf_len = (coll_req->flat_tensor.element_size() *
+                             coll_req->flat_tensor.numel());
+    coll_req->elem_size = (input_tensor.element_size() *
+                           input_tensor.numel());
+
+    *request = (torch_ucc_coll_request_t*)coll_req;
+
     return TORCH_UCC_OK;
 }
 
@@ -243,16 +269,11 @@ static torch_ucc_status_t torch_bnxt_co_coll_cmd(torch_bnxt_co_request_t* req)
     case BNXT_CO_ALLREDUCE:
         return TORCH_UCC_ERROR;
 
-    case BNXT_CO_REDUCE:
-        return TORCH_UCC_ERROR;
-
     case BNXT_CO_ALLTOALL:
         return (bnxt_co_alltoall_cmd(req->comm->bnxt_co_ctx,
                                      req->datatype,
                                      req->src_buf,
                                      req->src_buf_len,
-                                     req->dst_buf,
-                                     req->dst_buf_len,
                                      &req->tag) == BNXT_CO_OK)
                    ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
@@ -260,16 +281,12 @@ static torch_ucc_status_t torch_bnxt_co_coll_cmd(torch_bnxt_co_request_t* req)
         return TORCH_UCC_ERROR;
 
     case BNXT_CO_ALLGATHER:
-        return TORCH_UCC_ERROR;
-
-    case BNXT_CO_FANIN:
-        return TORCH_UCC_ERROR;
-
-    case BNXT_CO_FANOUT:
-        return TORCH_UCC_ERROR;
-
-    case BNXT_CO_FANOUT_GET:
-        return TORCH_UCC_ERROR;
+        return (bnxt_co_allgather_cmd(req->comm->bnxt_co_ctx,
+                                      req->datatype,
+                                      req->src_buf,
+                                      req->src_buf_len,
+                                      &req->tag) == BNXT_CO_OK)
+                   ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
     default:
         return TORCH_UCC_ERROR;
@@ -299,9 +316,6 @@ static torch_ucc_status_t torch_bnxt_co_coll_resp(torch_bnxt_co_request_t* req)
     case BNXT_CO_ALLREDUCE:
         return TORCH_UCC_ERROR;
 
-    case BNXT_CO_REDUCE:
-        return TORCH_UCC_ERROR;
-
     case BNXT_CO_ALLTOALL:
         /* copy the result into the output buffer */
         return (bnxt_co_alltoall_resp(req->comm,
@@ -316,25 +330,23 @@ static torch_ucc_status_t torch_bnxt_co_coll_resp(torch_bnxt_co_request_t* req)
         return TORCH_UCC_ERROR;
 
     case BNXT_CO_ALLGATHER:
-#if 0 /* XXX */
-        if (req->coll_type == XCCL_ALLGATHER) {
-            int comm_size = req->comm->p2p_comm->size;
-            std::vector<at::Tensor>& output_vec = req->super.dst;
-            for (int i = 0; i < comm_size; ++i) {
-                output_vec[i].copy_(req->flat_tensor[i]);
-            }
+        if (bnxt_co_allgather_resp(req->comm,
+                                   req->datatype,
+                                   req->resp_msg,
+                                   req->resp_msg_len,
+                                   req->dst_buf,
+                                   req->dst_buf_len) != BNXT_CO_OK) {
+            return TORCH_UCC_ERROR;
         }
-#endif
-        return TORCH_UCC_ERROR;
 
-    case BNXT_CO_FANIN:
-        return TORCH_UCC_ERROR;
+        /* copy the flat data back to the output tensors */
+        {
+            std::vector<at::Tensor>& output_vec = req->super.dst;
+            for (int i = 0; i < req->comm->p2p_comm->size; i++)
+                output_vec[i].copy_(req->flat_tensor[i]);
+        }
 
-    case BNXT_CO_FANOUT:
-        return TORCH_UCC_ERROR;
-
-    case BNXT_CO_FANOUT_GET:
-        return TORCH_UCC_ERROR;
+        return TORCH_UCC_OK;
 
     default:
         return TORCH_UCC_ERROR;

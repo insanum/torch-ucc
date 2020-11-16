@@ -65,8 +65,16 @@ elif args.op == "alltoallv":
     in_split = [1]*size
     dist.all_to_all_single(t2, t, out_split, in_split)
 elif args.op == "allgather":
-    dist.all_gather([t1, t2], t)
-
+    v = [ t1, t2 ]
+    for i in range(2, size):
+        v.append(torch.zeros([size]))
+    dist.all_gather(v, t)
+    s = 'rank ' + str(rank) + ' ' + str(t) + ' : '
+    for i in range(0, size):
+        s += '(' + str(i) + ') ' + str(v[i]) + ' : '
+    print(s)
+    dist.destroy_process_group()
+    sys.exit(0)
 else:
     print("Incorrect operation")
     sys.exit(1)
