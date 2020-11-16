@@ -71,6 +71,6 @@ else:
     print("Incorrect operation")
     sys.exit(1)
 
-#dist.barrier()
+dist.barrier()
 print('rank ', rank, ':', t, ":", t1, ":", t2)
 dist.destroy_process_group()

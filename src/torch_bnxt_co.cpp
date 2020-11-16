@@ -172,6 +172,21 @@ torch_ucc_status_t torch_bnxt_co_barrier(
     torch_ucc_coll_comm_t* coll_comm,
     torch_ucc_coll_request_t** request)
 {
+    torch_bnxt_co_comm_t* bnxt_co_comm = (torch_bnxt_co_comm_t*)coll_comm;
+    torch_bnxt_co_request_t* coll_req;
+
+    coll_req = new torch_bnxt_co_request_t;
+
+    torch_ucc_coll_request_init(coll_comm,
+                                (torch_ucc_coll_request_t*)coll_req,
+                                nullptr, nullptr);
+
+    coll_req->comm = bnxt_co_comm;
+    coll_req->status = TORCH_UCC_OPERATION_INITIALIZED;
+    coll_req->coll_type = BNXT_CO_BARRIER;
+
+    *request = (torch_ucc_coll_request_t*)coll_req;
+
     return TORCH_UCC_OK;
 }
 
@@ -212,7 +227,9 @@ static torch_ucc_status_t torch_bnxt_co_coll_cmd(torch_bnxt_co_request_t* req)
 {
     switch (req->coll_type) {
     case BNXT_CO_BARRIER:
-        return TORCH_UCC_ERROR;
+        return (bnxt_co_barrier_cmd(req->comm->bnxt_co_ctx,
+                                    &req->tag) == BNXT_CO_OK)
+                   ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
     case BNXT_CO_BROADCAST:
         return (bnxt_co_broadcast_cmd(req->comm->bnxt_co_ctx,
@@ -263,7 +280,10 @@ static torch_ucc_status_t torch_bnxt_co_coll_resp(torch_bnxt_co_request_t* req)
 {
     switch (req->coll_type) {
     case BNXT_CO_BARRIER:
-        return TORCH_UCC_ERROR;
+        return (bnxt_co_barrier_resp(req->comm,
+                                     req->resp_msg,
+                                     req->resp_msg_len) == BNXT_CO_OK)
+                   ? TORCH_UCC_OK : TORCH_UCC_ERROR;
 
     case BNXT_CO_BROADCAST:
         /* copy the result into the output buffer */
